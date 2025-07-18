@@ -4,13 +4,32 @@ import requests
 import logging
 from app.core.config import settings
 from app.core.database import conn, cur
-from app.crud.db_call import create_call
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
-from app.schemas.call_data_schemas import CallCreate, CallRead
-from app.crud.db_call import create_call, get_call
+from app.schemas.call_data_schemas import (
+    CallCreate,
+    CallRead, 
+    CallBase, 
+    SendCallRequest, 
+    SendScheduledCallRequest
+    )
+from app.crud.db_call import (
+    create_call, 
+    get_all_calls,
+    get_call_by_id,
+    get_scheduled_call,
+    get_call_thread_id
+    )
+import cohere
+import json
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+import requests
+from datetime import datetime
+import pytz
+from app.services.scheduler import schedule_call,scheduler
 
 router = APIRouter()
 
@@ -22,6 +41,16 @@ def get_db():
         db.close()
 
 
+async def call_scheduler(db):
+    calls = get_scheduled_call(db)
+    calls_serialized = [SendScheduledCallRequest.model_validate(call) for call in calls]
+    try:
+        for call in calls_serialized:
+            schedule_call(call.model_dump())
+        return {"message":"Calls scheduled"}
+
+    except Exception as e:
+        logger.error(f"Error in call scheduler: {e}")
 
 # @router.post("/calls", response_model=CallRead)
 # def create_call_route(call: CallCreate, db: Session = Depends(get_db)):
@@ -31,25 +60,80 @@ def get_db():
 # def get_call_route(call_id: str, db: Session = Depends(get_db)):
 #     return get_call(db, call_id)
 
+async def llm_generate_data(data):
 
+    co = cohere.Client("BCxkxzdkBAiA9Ey0mS7csgHSRxaV2YHcYu6mtTrg") 
+    call_date= data.get('created_at')
+    call_transcript =  data.get('concatenated_transcript')
+
+    prompt = f"""
+    You are an AI assistant that analyzes customer service call transcripts. Based on the transcript and the call date, extract the following details:
+
+    1. **Summary**: A brief summary of the conversation (3-5 lines).
+    2. **Customer Reaction**: Categorize the customer's overall reaction to the product as one of: `Positive`, `Negative`, or `Neutral`.
+    3. **Next Call Scheduled Datetime**: Extract the date and time of the next scheduled call, if mentioned. Format it as an ISO 8601 string (e.g., "2025-07-19T15:00:00").
+    4. **Timezone**: The timezone associated with the next scheduled call, if available (e.g., "Asia/Kolkata", "UTC", etc.). If not explicitly mentioned, infer from context or return `Unknown`.
+    5. **Is Call Scheduled?**: Return `True` if a follow-up call is scheduled, otherwise `False`.
+
+    ### Input:
+    **Call Date**: {call_date}
+
+    **Transcript**:
+    '''
+    {call_transcript}
+    '''
+
+    ### Output Format (in JSON):
+    ```json
+    {{
+    "summary": "<summary_here>",
+    "customer_reaction": "<Positive/Negative/Neutral>",
+    "next_call_datetime": "<ISO_8601_datetime_or_null>",
+    "timezone": "<timezone_or_unknown>",
+    "is_call_scheduled": <true_or_false>
+    }}
+    """
+
+    response = co.chat(
+        model="command-r-plus",
+        message=prompt,
+        temperature=0.5,
+        chat_history=[],
+        connectors=[],
+    )
+
+    answer = (response.text).strip('```').lstrip('json')
+    data = json.loads(answer)
+
+    return data
+
+
+async def delete_scheduler():
+    try:
+        scheduler.remove_all_jobs()
+        logger.info("Emptied Scheduler")
+        return {"status":"successful"}
+    except:
+        raise HTTPException(500)
 
 
 async def get_postcall_data(request: Request, db: Session):
     """Receive and process webhook callbacks from Bland AI"""
     try:
         data =  await request.json()
+        llm_data = await llm_generate_data(data)
         logger.info(f"📥 Incoming Webhook Payload: {data}")
-
+        # thread_id = get_call_thread_id(db,data)
         call_id = str(data.get("call_id"))
         transcript = str(data.get("concatenated_transcript"))
         summary = str(data.get("summary"))
-        # variables = str(data.get("variables", {}))
+        # metdata = str(data.get("metadata", {}))
         call_to = str(data.get("to"))
         call_from = str(data.get("from"))
 
         logger.info(f"🆔 Call ID: {call_id}")
         logger.info(f"📄 Summary: {summary}")
-        # logger.info(f"📦 Variables: {variables}")
+        
 
         if not call_id:
             logger.error("❌ Missing call_id in webhook payload")
@@ -70,12 +154,13 @@ async def get_postcall_data(request: Request, db: Session):
                 headers = {"Authorization": f"Bearer {bland_api_key}"}
                 analysis_url = f"https://api.bland.ai/v1/calls/{call_id}/analyze"
                 analysis_payload = {
-                    "goal": "Understand customer's interest in real estate projects and satisfaction level",
+                    "goal": "Understand the customer's interest in the product and pay attention to whether they want to schedule another call",
                     "questions": [
                         ["Did customer answer","boolean"],
                         ["what was the customer's reaction to the product", " 'positive' or 'negative' or 'neutral' "],
-                        ["Follow-up required", "boolean"],
-                        ["Next Call Schedule Data, give data and time if specified","string"]
+                        ["Is call scheduled, Return True if a follow-up call is scheduled, otherwise False.", "boolean"],
+                        ["Next Call Schedule Data, give timestamp if specified,Extract the date and time of the next scheduled call, if mentioned. Format it as an ISO 8601 string (e.g., '2025-07-19T15:00:00').","string"],
+                        ["Next Call Schedule Data, give Timezone if specified","string"]
                     ]
                 }
 
@@ -89,6 +174,7 @@ async def get_postcall_data(request: Request, db: Session):
                 if analysis_response.status_code == 200:
                     analysis_data =  analysis_response.json()
                     logger.info(f"📊 Analysis successful: {analysis_data}")
+                    logger.info(f"📊 LLM Data: ",llm_data)
                 else:
                     logger.error(f"❌ Analysis API error: {analysis_response.status_code} - {analysis_response.text}")
                     
@@ -98,16 +184,27 @@ async def get_postcall_data(request: Request, db: Session):
                 logger.error(f"❌ Analysis processing error: {e}")
 
         # Prepare call record
+        print(data.get('batch_id',"None"))
+        
         call_data = CallCreate(
+            # call_thread_id=thread_id,
+            batch_id= data.get('batch_id',"None"),
+            created_at=data.get('created_at'),
+            is_call_scheduled=analysis_data['answers'][2],
+            timezone=analysis_data['answers'][4],
+            scheduled_call_datetime=analysis_data['answers'][3],
             emotion=analysis_data['answers'][1],
-            completed=True,
+            status=data.get('status'),
             summary=summary,
             from_phone=call_from,
             to_phone=call_to,
             call_id=call_id,
             call_transcript=str(transcript)
         )
-
+        if call_data.is_call_scheduled == "True":
+            schedule_call(call_data)
+        for i in get_scheduled_call(db):
+            print(i.call_id,i.to_phone,i.from_phone)
 
        
         try:
@@ -134,25 +231,25 @@ async def get_postcall_data(request: Request, db: Session):
 
 async def create_single_call(request):
     """Send a single AI phone call"""
+    print(request)
     try:
         url = "https://api.bland.ai/v1/calls"
         bland_api_key = settings.BLAND_API_KEY
-        
+
         if not bland_api_key:
             raise HTTPException(status_code=500, detail="BLAND_API_KEY not configured")
-        
+
         headers = {
             "Authorization": f"Bearer {bland_api_key}",
             "Content-Type": "application/json"
         }
-        
+
         payload = {
-            "phone_number": request.phone_number,
-            "pathway_id": request.pathway_id,
-            "variables": request.variables or {}
+            "phone_number": request.to_phone,
+            "pathway_id": request.pathway_id
         }
 
-        # Add optional fields only if they have values
+        # Optional fields
         if request.task:
             payload["task"] = request.task
         if request.record is not None:
@@ -160,14 +257,24 @@ async def create_single_call(request):
         if request.webhook:
             payload["webhook"] = request.webhook
 
-        logger.info(f"📞 Sending call to {request.phone_number}")
-        
+        # Follow-up support
+        # if request.call_thread_id:
+        #     payload["call_thread_id"] = request.call_thread_id
+        # if request.is_followup:
+        #     payload["is_followup"] = request.is_followup
+        # if request.followup_to_call_id:
+        #     payload["followup_to_call_id"] = request.followup_to_call_id
+
+        logger.info(f"📞 Sending call to {request.to_phone}")
+        print(type(payload))
+        print(payload)
+    
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
-        
+
         result = response.json()
         logger.info(f"✅ Call sent successfully: {result}")
-        
+
         return result
 
     except requests.exceptions.HTTPError as http_err:
@@ -176,15 +283,15 @@ async def create_single_call(request):
         if hasattr(http_err, 'response') and http_err.response:
             error_detail += f" - {http_err.response.text}"
         raise HTTPException(status_code=400, detail=error_detail)
-    
+
     except requests.exceptions.Timeout:
         logger.error("❌ Request timeout")
         raise HTTPException(status_code=408, detail="Request timeout")
-    
+
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Request error: {e}")
         raise HTTPException(status_code=500, detail="Failed to send call")
-    
+
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -221,7 +328,7 @@ async def create_batch_call(request):
             "call_objects": [
                 {
                     "phone_number": call.phone_number,
-                    "variables": call.variables or {}
+                    # "metadata": call.metadata or {}
                 }
                 for call in request.calls
             ]
@@ -257,18 +364,14 @@ async def create_batch_call(request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def get_calls_from_db(limit: int = 50, skip: int = 0):
+async def get_calls_from_db(limit, skip,db):
     """Get call history from database"""
     try:
-        cursor = calls_collection.find().sort("created_at", -1).skip(skip).limit(limit)
-        calls = await cursor.to_list(length=limit)
+        calls = get_all_calls(db)
+        calls_serialized = [CallRead.model_validate(call) for call in calls]
         
-        # Convert ObjectId to string for JSON serialization
-        for call in calls:
-            if "_id" in call:
-                call["_id"] = str(call["_id"])
-        
-        return {"calls": calls, "count": len(calls)}
+        return {"calls": calls_serialized, "count": len(calls_serialized)}
+    
     
     except Exception as e:
         logger.error(f"❌ Error fetching calls: {e}")

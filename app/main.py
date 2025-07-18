@@ -32,6 +32,10 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # DB connection
 connect_to_db()
 
+
+
+
+
 # Routers
 app.include_router(api_router)
 

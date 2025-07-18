@@ -21,7 +21,7 @@ cur = None
 # database.py
 
 DATABASE_URL = settings.DB_URL  # or use PostgreSQL, etc.
-print(DATABASE_URL)
+
 engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
