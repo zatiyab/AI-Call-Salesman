@@ -22,11 +22,11 @@ def get_call_by_id(db: Session, call_id: str):
 
 
 def get_call_thread_id(db:Session,data):
-    metadata = data.get("metadata")
+    metadata = data.get("metadata",{})
     if metadata:
-        if metadata.get("is_followup") and metadata.get("followup_to_call_id"):
+        if metadata.get("is_followup",False) and metadata.get("followup_to_call_id",None):
             # Fetch the thread ID from the original call
-            original_call = db.query(Call).filter(Call.id == metadata.get("followup_to_call_id")).first()
+            original_call = db.query(Call).filter(Call.call_id == metadata.get("followup_to_call_id")).first()
             if not original_call:
                 raise ValueError("Original call for follow-up not found.")
             thread_id = original_call.call_thread_id
@@ -37,3 +37,6 @@ def get_call_thread_id(db:Session,data):
         # Create a new thread ID for the initial call
         thread_id = uuid.uuid4()
     return thread_id
+
+def delete_by_call_id(id,db):
+    return db.query(Call).filter(Call.call_id == id).delete()

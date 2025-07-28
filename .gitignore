@@ -1,3 +1,7 @@
 .env
 venv
 BlandAI.egg-info
+app\LLM_model
+try.py
+try2.py
+try3.py
