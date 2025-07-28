@@ -2,6 +2,9 @@
 venv
 BlandAI.egg-info
 app\LLM_model
+LLM_model
+app\LLM_model\Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
 try.py
 try2.py
 try3.py
+Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
