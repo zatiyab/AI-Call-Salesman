@@ -30,22 +30,7 @@ from apscheduler.triggers.date import DateTrigger
 import requests
 from datetime import datetime
 import pytz
-# from app.services.scheduler import (
-#     schedule_call,
-#     scheduler    
-#     )
-
-
-# async def call_scheduler(db):
-#     calls = get_scheduled_call(db)
-#     calls_serialized = [SendScheduledCallRequest.model_validate(call) for call in calls]
-#     try:
-#         for call in calls_serialized:
-#             schedule_call(call.model_dump())
-#         return {"message":"Calls scheduled"}
-    
-#     except Exception as e:
-#         logger.error(f"Error in call scheduler: {e}")
+from app.services.utils import serialize_datetimes
 
 
 async def create_single_call(request):
@@ -132,30 +117,32 @@ async def create_batch_call(request):
         }
 
         global_payload = {
-            "pathway_id": request.pathway_id
+            "start_time":str(format_datetime(str(request.global_keyword.start_time))),
+            "task": request.global_keyword.task,
+            "record":request.global_keyword.record,
+            "webhook":request.global_keyword.webhook
         }
         
-        # Add optional global fields only if they have values
-        if request.task:
-            global_payload["task"] = request.task
-        if request.record is not None:
-            global_payload["record"] = request.record
-        if request.webhook:
-            global_payload["webhook"] = request.webhook
 
+        call_objs = request.call_objects
         payload = {
             "global": global_payload,
             "call_objects": [
                 {
-                    "phone_number": call.phone_number,
-                    # "metadata": call.metadata or {}
+                    "phone_number": call.to_phone,
+                    "request_data":call.request_data,
+                    "ivr_mode":call.ivr_mode,
+                    "voice_id":call.voice_id,
+                    "reduce_latency":call.reduce_latency,
+                    "metadata":call.metadata
                 }
-                for call in request.calls
+                for call in call_objs
             ]
         }
 
-        logger.info(f"📞 Sending batch of {len(request.calls)} calls")
-        
+        logger.info(f"📞 Sending batch of {len(call_objs)} calls")
+        payload = serialize_datetimes(payload)
+        print(payload)
         response = requests.post(url, json=payload, headers=headers, timeout=60)
         response.raise_for_status()
         
@@ -193,7 +180,8 @@ def stop_active_call_from_id(call_id):
     url = f"https://api.bland.ai/v1/calls/{call_id}/stop"
     response = requests.post(url=url,headers=headers)
     response = response.json()
-    return {"status":response["status"]}
+    print(response,type(response))
+    return response
 
 
 def stop_all_calls():   

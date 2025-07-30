@@ -1,6 +1,6 @@
 import cohere
 import json
-
+from app.core.config import settings
 
 def format_datetime(iso_str):
     from datetime import datetime
@@ -21,7 +21,7 @@ def format_datetime(iso_str):
 
 def llm_generate_data(data):
 
-    co = cohere.Client("BCxkxzdkBAiA9Ey0mS7csgHSRxaV2YHcYu6mtTrg") 
+    co = cohere.Client(api_key=settings.COHERE_API_KEY) 
     call_date= data.get('created_at')
     call_transcript =  data.get('concatenated_transcript')
 
@@ -67,3 +67,15 @@ def llm_generate_data(data):
     print("JSON:",json.loads(answer))
     print(data)
     return data
+
+
+from datetime import datetime
+
+def serialize_datetimes(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: serialize_datetimes(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_datetimes(i) for i in obj]
+    return obj

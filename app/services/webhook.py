@@ -7,18 +7,21 @@ import requests
 from app.crud.db_call import (
     create_call,
     get_call_thread_id,
-    get_scheduled_call
+    get_scheduled_call,
+    create_campaign
 )
-# from app.services.scheduler import schedule_next_call
+from app.schemas.create_models import CreateCampaign
+from app.services.scheduler import schedule_next_call
 from app.schemas.call_data_schemas import CallCreate
 from app.schemas.requests_model import SendCallRequest
-from app.services.tasks import schedule_next_call
+# from app.services.tasks import schedule_next_call
+from datetime import datetime
 
 async def get_postcall_data(request: Request, db: Session):
     """Receive and process webhook callbacks from Bland AI"""
     try:
         data =  await request.json()
-        # llm_data = llm_generate_data(data)
+        llm_data = llm_generate_data(data)
         llm_data = None
         logger.info(f"📥 Incoming Webhook Payload: {data}")
         # thread_id = get_call_thread_id(db,data)
@@ -82,35 +85,73 @@ async def get_postcall_data(request: Request, db: Session):
                 logger.error(f"❌ Analysis processing error: {e}")
 
         # Prepare call record
-        print('Batch ID: ',data.get('batch_id',None))
-        metadata_payload = data.get('metadata',{})
-        thread_id = get_call_thread_id(db=db,data=data)
-        call_data = CallCreate(
-            call_thread_id=thread_id,
-            is_followup=metadata_payload.get('is_followup',False),
-            followup_to_call_id = metadata_payload.get('followup_to_call_id',None),
-            batch_id= data.get('batch_id',None),
-            created_at=data.get('created_at'),
-            is_call_scheduled=analysis_data['answers'][2],
-            timezone=analysis_data['answers'][4],
-            scheduled_call_datetime=analysis_data['answers'][3],
-            emotion=analysis_data['answers'][1],
-            status=data.get('status','error'),
-            summary=summary,
-            from_phone=call_from,
-            to_phone=call_to,
-            call_id=call_id,
-            call_transcript=str(transcript)
-        )
+
+        try:
+            print('Batch ID:', data.get('batch_id'))
+
+            metadata_payload = data.get('metadata', {})
+            thread_id = get_call_thread_id(db=db, data=data)
+            print("Thread ID:", thread_id, type(thread_id))
+
+            variables = data.get('variables') or {}
+            metadata = variables.get('metadata') or {}
+
+            # Handle campaign changes
+            changes = metadata.get('changes')
+            if changes and isinstance(changes, dict):
+                changes.pop('campaign_id', None)
+                changes['batch_id'] = data.get('batch_id')
+                try:
+                    campaign_data = CreateCampaign(**changes)
+                    create_campaign(campaign_data, db)
+                except Exception as e:
+                    logger.warning("Failed to create campaign: %s", e)
+
+            # Process call creation
+            analysis_answers = analysis_data.get('answers') or []
+            created_at_str = data.get('created_at')
+            scheduled_call_str = analysis_answers[3] if len(analysis_answers) > 3 else None
+
+            def parse_datetime_safe(date_str):
+                try:
+                    return datetime.fromisoformat(str(date_str)) if date_str else None
+                except Exception as e:
+                    logger.warning("Invalid datetime: %s", e)
+                    return None
+
+            call_data = CallCreate(
+                task=metadata.get('task'),
+                campaign_thread_id=metadata.get('campaign_thread_id'),
+                contact_id=int(metadata.get('contact_id')),
+                call_thread_id=thread_id,
+                is_followup=metadata_payload.get('is_followup', False),
+                followup_to_call_id=metadata_payload.get('followup_to_call_id'),
+                batch_id=data.get('batch_id'),
+                created_at=parse_datetime_safe(created_at_str),
+                is_call_scheduled=analysis_answers[2] if len(analysis_answers) > 2 else None,
+                timezone=analysis_answers[4] if len(analysis_answers) > 4 else None,
+                scheduled_call_datetime=parse_datetime_safe(scheduled_call_str) if scheduled_call_str and scheduled_call_str != 'None' else None,
+                emotion=analysis_answers[1] if len(analysis_answers) > 1 else None,
+                status=data.get('status', 'error'),
+                summary=summary,
+                from_phone=call_from,
+                to_phone=call_to,
+                call_id=call_id,
+                call_transcript=str(transcript)
+            )
+
+        except Exception as e:
+            logger.exception("Error while preparing call_data: %s", e)
+
+
         if call_data.is_call_scheduled == True:
             data["to_phone"] = data["to"]
             await schedule_next_call(data=SendCallRequest(**data),transcript=str(transcript),date = call_data.scheduled_call_datetime,followup_to_call_id=call_id)
-            # schedule_call(call_data)
+            
         print("All Scheduled Calls in database:")
         for i in get_scheduled_call(db):
             print(i.call_id,i.to_phone,i.from_phone)
 
-       
         try:
             result =  create_call(db,call_data)
             logger.info(f"✅ Inserted into PostgresDB with ID: {result.call_id}")

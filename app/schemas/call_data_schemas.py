@@ -11,7 +11,7 @@ embedder = SentenceTransformer("BAAI/bge-large-en-v1.5")
 
 class CallBase(BaseModel):
     batch_id: Optional[str] = None
-    scheduled_call_datetime: Optional[str]=None
+    scheduled_call_datetime: Optional[datetime]=None
     timezone: Optional[str]=None
     is_call_scheduled: Optional[bool]=None
     emotion: Optional[str] =None
@@ -23,13 +23,16 @@ class CallBase(BaseModel):
     model_config = ConfigDict(from_attributes=True) 
 
 class CallCreate(CallBase):
+    contact_id:int
+    task:Optional[str]
     call_thread_id: UUID
     followup_to_call_id: Optional[str] = None
     is_followup: bool = False
-    pathway_id: Optional[str] = "https://e60889698168.ngrok-free.app/bland/postcall"
+    pathway_id: Optional[str] = ""
     batch_id: Optional[str] = "None"
-    created_at:Optional[str]
+    created_at:Optional[datetime]
     call_id: str    
+    webhook:Optional[str] = "https://bb109896dc71.ngrok-free.app/bland/postcall"
     embedding: Optional[list[float]]=None # Convert to numpy if needed
     model_config = ConfigDict(extra='allow')
 
@@ -44,5 +47,31 @@ class CallRead(CallBase):
     call_id: str
     created_at: Optional[datetime]
     scheduled_call_datetime: Optional[datetime]
-
+    task:Optional[str]
+    
     model_config = ConfigDict(from_attributes=True) 
+
+
+
+class CampaignItemPayload(BaseModel):
+    contact_id:int
+    ivr_mode:Optional[bool] =True
+    voice_id:Optional[int] = 0
+    reduce_latency:Optional[bool] = True
+    request_data:Optional[Dict[str,str]] = {}
+    metadata:Optional[Dict[str,str]] = {}
+    to_phone:str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
+class CampaignReadPayload(BaseModel):
+    contact_id:int
+    ivr_mode:Optional[bool] =True
+    voice_id:Optional[int] = 0
+    reduce_latency:Optional[bool] = True
+    to_phone:str
+
+    model_config = ConfigDict(from_attributes=True)
+
