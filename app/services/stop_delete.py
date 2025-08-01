@@ -2,6 +2,10 @@ from app.core.config import settings
 from fastapi import HTTPException
 import requests
 from app.core.database import logger
+from app.crud.update import (
+    soft_delete_contact
+)
+
 
 def stop_call_from_call_id(call_id):
     try:
@@ -44,7 +48,6 @@ def stop_call_from_call_id(call_id):
         logger.error(f"❌ Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
 def stop_batch_calls(batch_id):
     try:
         url = f'https://api.bland.ai/v2/batches/{batch_id}/stop'
@@ -85,3 +88,32 @@ def stop_batch_calls(batch_id):
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+def stop_all_calls():   
+    bland_api_key = settings.BLAND_API_KEY
+    headers = {
+        "Authorization": f"Bearer {bland_api_key}",
+        "Content-Type": "application/json"
+        }
+    url = f"https://us.api.bland.ai/v1/calls/active/stop"
+    response = requests.post(url=url,headers=headers)
+    response = response.json()
+    return {"status":response["status"],
+            "call":response["num_calls"]}
+
+def stop_active_call_from_id(call_id):
+    bland_api_key = settings.BLAND_API_KEY
+    headers = {
+        "Authorization": f"Bearer {bland_api_key}",
+        "Content-Type": "application/json"
+        }
+    url = f"https://api.bland.ai/v1/calls/{call_id}/stop"
+    response = requests.post(url=url,headers=headers)
+    response = response.json()
+    print(response,type(response))
+    return response
+
+def delete_contact(contact_id,db):
+    soft_delete_contact(contact_id,db)
+    return {"contact_id":contact_id,
+            "is_active":False}

@@ -1,10 +1,12 @@
+from datetime import datetime
+import pytz
 import cohere
 import json
 from app.core.config import settings
 
 def format_datetime(iso_str):
-    from datetime import datetime
-    import pytz
+    if iso_str.endswith("Z"):
+        iso_str = iso_str.replace("Z", "+00:00")
 
     dt_utc = datetime.fromisoformat(iso_str)
 
@@ -69,7 +71,6 @@ def llm_generate_data(data):
     return data
 
 
-from datetime import datetime
 
 def serialize_datetimes(obj):
     if isinstance(obj, datetime):

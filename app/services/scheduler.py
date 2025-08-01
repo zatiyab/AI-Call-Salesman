@@ -1,15 +1,7 @@
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.date import DateTrigger
-import requests
 from app.core.database import logger
-from datetime import datetime
-import pytz
-from app.crud.db_call import create_call, get_all_calls,get_call_by_id, get_scheduled_call
-from app.schemas.call_data_schemas import (CallCreate, CallRead, CallBase)
 from app.services.utils import format_datetime
-from app.schemas.requests_model import SendCallRequest
-from app.services.call_service import create_single_call
-
+from app.schemas.call import SendCallRequest
+from app.services.create import create_single_call
 
 
 async def schedule_next_call(data: SendCallRequest,transcript, date, followup_to_call_id):

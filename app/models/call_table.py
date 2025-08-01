@@ -34,6 +34,7 @@ class Call(Base):
     campaign_thread_id = Column(UUID(as_uuid=True),default=uuid.uuid4,nullable=False)
     contact_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer,nullable=True)
+    recording = Column(Boolean,nullable=False,default=True)
 
 
 
@@ -42,21 +43,27 @@ class Campaign(Base):
 
     user_id = Column(Integer,nullable=True)
     campaign_id = Column(Integer, primary_key=True, autoincrement=True)
-    campaign_name = Column(String(255), nullable=False)
     batch_id = Column(String(100), nullable=False)
+    campaign_thread_id = Column(UUID(as_uuid=True), nullable=True, server_default=func.uuid_generate_v4())
+    
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
+    
     task = Column(Text, nullable=True)
-    agent_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, nullable=True, server_default=func.now())
-    campaign_thread_id = Column(UUID(as_uuid=True), nullable=True, server_default=func.uuid_generate_v4())
+    
+    agent_name = Column(String(255), nullable=True)
     agent_voice = Column(String(255), nullable=True)
-    language = Column(String(100), nullable=True)
     agent_role = Column(String(255), nullable=True)
-    voicemail_message = Column(Text, nullable=True)
+    language = Column(String(100), nullable=True)
+    
     call_recording = Column(Boolean, nullable=True)
+    
+    voicemail_message = Column(Text, nullable=True)
     voicemail_setting = Column(Boolean, nullable=True)
+    
     campaign_phone_number = Column(String(15),nullable=True)
+    campaign_name = Column(String(255), nullable=False)
     business_name = Column(String(255), nullable=True)
     business_description = Column(Text, nullable=True)
     business_website = Column(String(255), nullable=True)
@@ -71,6 +78,7 @@ class Contact(Base):
     company_name = Column(String(255), nullable=True)
     tags = Column(Text, nullable=True)
     user_id = Column(Integer,nullable=True)
+    is_active = Column(Boolean, nullable = False, default=True)
     
 
 
