@@ -20,10 +20,13 @@ from app.schemas.call import (
     CallCreate, 
     SendCallRequest
 )
+from app.crud.read_db import check_is_active_for_campaign
 from app.schemas.campaign import CreateCampaignForm
 # from app.services.tasks import schedule_next_call
 from datetime import datetime
 
+def is_active_for_campaign(campaign_thread_id,call_id,db):
+    return bool(check_is_active_for_campaign(campaign_thread_id,call_id,db))
 
 
 def analysis_endpoint(call_id,llm_data):
@@ -136,8 +139,11 @@ async def get_postcall_data(request: Request, db: Session):
                 except Exception as e:
                     logger.warning("Invalid datetime: %s", e)
                     return None
+                
             campaign_thread_ID = get_campaign_thread_id(data)
+
             call_data = CallCreate(
+                recording_url=str(data.get('recording_url',None)),
                 user_id = metadata.get('user_id'),
                 campaign_thread_id=str(campaign_thread_ID),
                 contact_id=int(metadata.get('contact_id')),
@@ -171,11 +177,12 @@ async def get_postcall_data(request: Request, db: Session):
 
         if call_data.is_call_scheduled == True:
             data["to_phone"] = data["to"]
-            await schedule_next_call(data=SendCallRequest(**data),transcript=str(transcript),date = call_data.scheduled_call_datetime,followup_to_call_id=call_id)
+            if check_is_active_for_campaign(str(campaign_thread_ID),call_id,db):
+                await schedule_next_call(data=SendCallRequest(**data),transcript=str(transcript),date = call_data.scheduled_call_datetime,followup_to_call_id=call_id)
             
-        print("All Scheduled Calls in database:")
-        for i in get_scheduled_call(db):
-            print(i.call_id,i.to_phone,i.from_phone)
+        # print("All Scheduled Calls in database:")
+        # for i in get_scheduled_call(db):
+        #     print(i.call_id,i.to_phone,i.from_phone)
 
         try:
             result =  create_call(db,call_data)
@@ -203,7 +210,7 @@ async def get_postcall_data(request: Request, db: Session):
 
                 task = metadata.get('task'),
 
-                start_date = parse_datetime_safe(metadata.get('start_time')),
+                start_date = parse_datetime_safe(metadata.get('start_time')) if metadata.get('start_time',False) else parse_datetime_safe("2025-08-01T18:23:21.223Z"),
                 end_date = parse_datetime_safe(metadata.get('end_time')),
 
                 call_recording = data.get('record'),

@@ -35,8 +35,8 @@ class Call(Base):
     contact_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer,nullable=True)
     recording = Column(Boolean,nullable=False,default=True)
-
-
+    recording_url = Column(Text,nullable=True)
+    is_active_for_campaign = Column(Boolean,nullable=True,default=True)
 
 class Campaign(Base):
     __tablename__ = 'campaigns'
