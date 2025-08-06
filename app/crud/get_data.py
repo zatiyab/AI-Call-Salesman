@@ -113,7 +113,7 @@ def get_calls_data_from_userID(campaign_thread_id,user_id,db):
     calls.user_id,
     calls.from_phone,
     calls.emotion,
-    calls.recording,
+    calls.recording_url,
     calls.campaign_thread_id,
     contacts.contact_id,
     contacts.name

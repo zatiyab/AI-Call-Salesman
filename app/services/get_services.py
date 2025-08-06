@@ -124,7 +124,17 @@ def call_history_from_userID(campaign_thread_id,user_id,db):
             data[call[0]] = []
             call_thread_uniq.append(call[0])
 
-        data[call[0]].append(call)
+        data[call[0]].append({
+            "call_thread_id":call[0],
+            "created_at":call[1],
+            "user_id":call[2],
+            "from_phone":call[3],
+            "emotion":call[4],
+            "recording_url":call[5],
+            "campaign_thread_id":call[6],
+            "contact_id":call[7],
+            "conact_name":call[8]
+        })
             
     
     for k,v in data.items():
