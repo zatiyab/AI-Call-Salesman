@@ -11,3 +11,8 @@ def check_is_active_for_campaign(campaign_thread_id,call_id,db):
     return db.execute(select(Call.is_active_for_campaign)
                .where(Call.campaign_thread_id == campaign_thread_id)
                .where(Call.call_id == call_id)).scalars().all()
+
+def check_if_campaign_threadID_exists_for_batch(batch_id,db):
+    return db.execute(select(Call.campaign_thread_id)
+                      .where(Call.batch_id == batch_id)
+                      ).scalars().all()

@@ -63,7 +63,7 @@ class GlobalBatch(BaseModel):
     start_time:Optional[datetime] = None
     task:Optional[str]="You are a professional, warm, and articulate AI sales assistant named John, calling on behalf of {{business_name}}.\n\nContext:\n{{business_description}}\n\nTask Objective:\n{{task_description}}\n\nCustomer Info:\nName: {{customer_name}}\nEmail: {{cust_email}}\n\nGoal:\nConduct a friendly, human-like phone conversation with {{customer_name}}. Present the business offering in a helpful way, and if interested, offer to send information to {{cust_email}}. If the customer is busy or unavailable, politely ask for a better time to call back and confirm availability.\n\nGuidelines:\n- Speak slowly, clearly, and warmly.\n- Begin by introducing yourself as John, the AI assistant calling on behalf of {{business_name}}.\n- Ask if you’re speaking with {{customer_name}}.\n- Be brief but engaging when explaining the service — no long monologues.\n- Pause after each key sentence to let the customer respond.\n- Always check if they’re available to talk before continuing.\n- Ask if they’d like to receive more information via email.\n- If they’re not interested or unavailable, be respectful and offer to follow up later.\n- End the conversation politely and thank them for their time.\n\nExample Flow:\nYou: Hi, is this {{customer_name}}?\n\nCustomer: Yes, speaking.\n\nYou: Great! I'm John, an AI assistant calling on behalf of {{business_name}}. We help people like you by [brief value proposition from {{business_description}}]. Is this a good time to talk?\n\n[Wait for response.]\n\nYou: No worries if you're busy. Would you prefer I call at another time? Or I can email you more information at {{cust_email}} if that’s easier.\n\n[Adjust based on customer response.]\n\nYou: Thank you, {{customer_name}}! I appreciate your time. Have a wonderful day."
     record:Optional[bool] = True
-    webhook:Optional[str] ="https://71d0ca636c02.ngrok-free.app/bland/postcall" 
+    webhook:Optional[str] ="https://5f8c74c5f79c.ngrok-free.app/bland/postcall" 
     voicemail:Optional[VoiceMail] = VoiceMail()
   
     
@@ -108,7 +108,7 @@ class CallCreate(CallBase):
     task:Optional[str]
     is_followup: bool = False   
     created_at:Optional[datetime]
-    webhook:Optional[str] = "https://71d0ca636c02.ngrok-free.app/bland/postcall"
+    webhook:Optional[str] = "https://5f8c74c5f79c.ngrok-free.app/bland/postcall"
     embedding: Optional[list[float]]=None 
     recording:Optional[bool] = True
     recording_url:Optional[str]=None
@@ -145,7 +145,7 @@ class SendCallRequest(BaseModel):
 
     voicemail:Optional[VoiceMail] = VoiceMail()
     record:Optional[bool] = True
-    webhook:Optional[str] ="https://71d0ca636c02.ngrok-free.app/bland/postcall" 
+    webhook:Optional[str] ="https://5f8c74c5f79c.ngrok-free.app/bland/postcall" 
     @field_validator('to_phone')
     def validate_phone_number(cls, v):
         # Basic phone number validation

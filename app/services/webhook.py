@@ -9,18 +9,20 @@ from app.crud.get_data import (
     get_scheduled_call,
     get_campaign_thread_id
 )
-
+from app.crud.read_db import (
+    check_is_active_for_campaign,
+    check_if_campaign_threadID_exists_for_batch
+)
 from app.crud.create_db import (
     create_call,
     create_campaign
 )
-from app.schemas.campaign import CreateCampaignTable
 from app.services.scheduler import schedule_next_call
+from app.schemas.campaign import CreateCampaignTable
 from app.schemas.call import (
     CallCreate, 
     SendCallRequest
 )
-from app.crud.read_db import check_is_active_for_campaign
 from app.schemas.campaign import CreateCampaignForm
 # from app.services.tasks import schedule_next_call
 from datetime import datetime
@@ -71,7 +73,15 @@ def analysis_endpoint(call_id,llm_data):
 
 
 
-
+def campaign_threadID_for_batch(batch_id,db):
+    campaign_thread_ids = check_if_campaign_threadID_exists_for_batch(batch_id,db)
+    try:
+        campaign_thread_id = campaign_thread_ids[0]
+        print(campaign_thread_id)
+        return campaign_thread_id
+    except:
+        print('No campaign_thread_id yet')
+        return None
 
 async def get_postcall_data(request: Request, db: Session):
     """Receive and process webhook callbacks from Bland AI"""
@@ -140,8 +150,9 @@ async def get_postcall_data(request: Request, db: Session):
                     logger.warning("Invalid datetime: %s", e)
                     return None
                 
-            campaign_thread_ID = get_campaign_thread_id(data)
-
+            batch_campaign_threadID = campaign_threadID_for_batch(data.get('batch_id'),db)
+            campaign_thread_ID = batch_campaign_threadID if batch_campaign_threadID !=None else get_campaign_thread_id(data)
+            print(campaign_thread_ID)
             call_data = CallCreate(
                 recording_url=str(data.get('recording_url',None)),
                 user_id = metadata.get('user_id'),

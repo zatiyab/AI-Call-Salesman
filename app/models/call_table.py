@@ -30,7 +30,7 @@ class Call(Base):
     call_transcript = Column(Text, nullable=True)
     embedding = Column(Vector(1024), nullable=True)  
     task = Column(Text,nullable=True)
-    webhook = Column(Text, nullable=True,default="https://71d0ca636c02.ngrok-free.app/bland/postcall")
+    webhook = Column(Text, nullable=True,default="https://5f8c74c5f79c.ngrok-free.app/bland/postcall")
     campaign_thread_id = Column(UUID(as_uuid=True),default=uuid.uuid4,nullable=False)
     contact_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer,nullable=True)
